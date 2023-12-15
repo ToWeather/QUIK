@@ -34,7 +34,7 @@ def get_act_scales(model, dataloader, output_file):
 
     def update_input_info(name):
         def tmp(_, inp, out):
-            inp = inp.reshape(-1, inp.shape[-1])
+            inp = inp[0].reshape(-1, inp.shape[-1])
             act_scales.setdefault(name, []).append(inp.abs().mean(0))
         return tmp
 
@@ -46,11 +46,12 @@ def get_act_scales(model, dataloader, output_file):
         full = modelutils.find_layers(layer)
         handles = []
         for name in full:
-            handles.append(full[name].register_forward_hook(update_input_info(name)))
+            complete_name = f"model.layers.{i}.{name}"
+            handles.append(full[name].register_forward_hook(update_input_info(complete_name)))
         all_handles.extend(handles)
 
     for input_ids in dataloader:
-        model(input_ids.to(model.device))
+        model(input_ids.unsqueeze(0).to(model.device))
 
     for handle in all_handles:
         handle.remove()
