@@ -34,9 +34,11 @@ def llama_parser():
     parser.add_argument('--transform_type', '-f', type=str, required=True,
                         choices=list(DATA_TRANSFORM_MAP),
                         help="the data transform type.")
+    parser.add_argument('--max_seq_len', '-l', type=int, default=256,
+                        help="the max seq len.")
     parser.add_argument('--sample_cnt', '-s', type=int, default=128,
                         help="the sample count for quantization.")
-    parser.add_argument('--act_scale_file_name', type=str, required=True, default='Llama-2-7b-hf')
+    parser.add_argument('--act_scale_file_name', type=str, default='Llama-2-7b-hf')
 
     parser.add_argument(
         '--percdamp', type=float, default=.01,
@@ -80,7 +82,7 @@ def llama_sequential(model, dataloader, act_scales, dev, args):
 
     dtype = next(iter(model.parameters())).dtype
     inps = torch.zeros(
-        (args.nsamples, model.seqlen, model.config.hidden_size), dtype=dtype, device=dev
+        (args.sample_cnt, model.max_seq_len, model.config.hidden_size), dtype=dtype, device=dev
     )
     cache = {'i': 0, 'attention_mask': None}
 
@@ -202,7 +204,7 @@ def llama_sequential(model, dataloader, act_scales, dev, args):
     return quantizers
 
 
-def get_calibrate_examples(tokenizer, data_file, sample_cnt, data_transform_type, gist_token):
+def get_calibrate_examples(tokenizer, data_file, sample_cnt, data_transform_type, gist_token, max_seq_len):
     cnt = 0
     candidate_samples = []
     with open(data_file) as f:
@@ -225,6 +227,9 @@ def get_calibrate_examples(tokenizer, data_file, sample_cnt, data_transform_type
         feature = DATA_TRANSFORM_MAP[data_transform_type](sample, **kwargs)
         text = feature["pre_text"] + feature["post_text"]
         input_ids = tokenizer(text)['input_ids']
+        if len(input_ids) < max_seq_len:
+            input_ids = [tokenizer.pad_token_id] * (max_seq_len - len(input_ids)) + input_ids
+        input_ids = input_ids[:max_seq_len]
         examples.append((input_ids, input_ids))
     print(f"loaded {len(examples)} samples in total!")
     return examples
@@ -260,7 +265,7 @@ if __name__ == '__main__':
     # Apply GPTQ on the model
     if args.w_bits < 16:
         dataloader = get_calibrate_examples(
-            tokenizer, args.data_file, args.sample_cnt, args.data_transform_type, args.gist_token)
+            tokenizer, args.data_file, args.sample_cnt, args.transform_type, args.gist_token, args.max_seq_len)
         quantizers = llama_sequential(model, dataloader, act_scales, DEV, args)
 
     model.save_pretrained(args.output_dir)
