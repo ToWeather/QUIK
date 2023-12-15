@@ -36,6 +36,7 @@ def llama_parser():
                         help="the data transform type.")
     parser.add_argument('--sample_cnt', '-s', type=int, default=128,
                         help="the sample count for quantization.")
+    parser.add_argument('--act_scale_file_name', type=str, required=True, default='Llama-2-7b-hf')
 
     parser.add_argument(
         '--percdamp', type=float, default=.01,
@@ -248,7 +249,7 @@ if __name__ == '__main__':
     # Extract Scale
     if args.w_bits < 16 or args.a_bits < 16:
         if args.fp_features > 0:
-            relative_path = os.path.join(modelutils.act_scale_dir, "{}.pt".format(args.model.split('/')[-1]))
+            relative_path = os.path.join(modelutils.act_scale_dir, "{}.pt".format(args.act_scale_file_name))
             model.config.act_scale_path = relative_path
             act_scales = torch.load(relative_path)
             print('Loaded act_scales from: ', relative_path)
