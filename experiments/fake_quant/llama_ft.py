@@ -82,7 +82,7 @@ def llama_sequential(model, dataloader, act_scales, dev, args):
 
     dtype = next(iter(model.parameters())).dtype
     inps = torch.zeros(
-        (args.sample_cnt, model.max_seq_len, model.config.hidden_size), dtype=dtype, device=dev
+        (args.sample_cnt, args.max_seq_len, model.config.hidden_size), dtype=dtype, device=dev
     )
     cache = {'i': 0, 'attention_mask': None}
 
@@ -101,7 +101,7 @@ def llama_sequential(model, dataloader, act_scales, dev, args):
     layers[0] = Catcher(layers[0])
     for batch in dataloader:
         try:
-            model(batch[0].to(dev))
+            model(batch[0].unsqueeze(0).to(dev))
         except ValueError:
             pass
     layers[0] = layers[0].module
@@ -179,7 +179,7 @@ def llama_sequential(model, dataloader, act_scales, dev, args):
             handles = []
             for name in subset:
                 handles.append(subset[name].register_forward_hook(add_batch(name)))
-            for j in range(args.nsamples):
+            for j in range(args.sample_cnt):
                 outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids)[0]
             for h in handles:
                 h.remove()
@@ -189,7 +189,7 @@ def llama_sequential(model, dataloader, act_scales, dev, args):
                 quantizers['model.layers.%d.%s' % (i, name)] = modules_quik[name].quantizer
                 modules_quik[name].free()
 
-        for j in range(args.nsamples):
+        for j in range(args.sample_cnt):
             outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids)[0]
 
         layers[i] = layer.cpu()
@@ -230,7 +230,7 @@ def get_calibrate_examples(tokenizer, data_file, sample_cnt, data_transform_type
         if len(input_ids) < max_seq_len:
             input_ids = [tokenizer.pad_token_id] * (max_seq_len - len(input_ids)) + input_ids
         input_ids = input_ids[:max_seq_len]
-        examples.append((input_ids, input_ids))
+        examples.append((torch.tensor(input_ids), torch.tensor(input_ids)))
     print(f"loaded {len(examples)} samples in total!")
     return examples
 
