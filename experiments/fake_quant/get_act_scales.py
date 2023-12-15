@@ -34,7 +34,7 @@ def get_act_scales(model, dataloader, output_file):
 
     def update_input_info(name):
         def tmp(_, inp, out):
-            inp = inp[0].reshape(-1, inp.shape[-1])
+            inp = inp[0].reshape(-1, inp[0].shape[-1])
             act_scales.setdefault(name, []).append(inp.abs().mean(0))
         return tmp
 
@@ -59,7 +59,7 @@ def get_act_scales(model, dataloader, output_file):
     model.config.use_cache = use_cache
 
     for name in act_scales:
-        act_scales[name] = torch.stack(act_scales[name]).mean(0)
+        act_scales[name] = torch.stack(act_scales[name]).mean(0).to("cpu")
     torch.save(act_scales, output_file)
 
 

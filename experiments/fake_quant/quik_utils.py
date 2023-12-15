@@ -124,6 +124,8 @@ class QUIK:
             W[:, i2:] -= Err1.matmul(Hinv[i1:i2, i2:])
 
         torch.cuda.synchronize()
+        print(f"avg_loss: {torch.sum(Losses).item() / self.nsamples}")
+
         self.layer.weight.data = Q.reshape(self.layer.weight.shape).to(self.layer.weight.data.dtype)
 
         # Permut Back the weights
