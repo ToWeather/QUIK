@@ -226,6 +226,7 @@ def get_calibrate_examples(tokenizer, data_file, sample_cnt, data_transform_type
         input_ids = tokenizer(text)['input_ids']
         examples.append((input_ids, input_ids))
     print(f"loaded {len(examples)} samples in total!")
+    return examples
 
 
 if __name__ == '__main__':
@@ -236,10 +237,19 @@ if __name__ == '__main__':
     model, tokenizer = get_model_and_tokenizer(args.model_dir, args.model_type)
     model.eval()
 
+    model.config.w_bits = args.w_bits
+    model.config.a_bits = args.a_bits
+
+    model.config.fp_features = args.fp_features
+    model.config.fp_relative = args.fp_relative
+    model.config.int8_down_proj = args.int8_down_proj
+    model.config.fp_threshold = args.fp_threshold
+
     # Extract Scale
     if args.w_bits < 16 or args.a_bits < 16:
-        if args.fp_features > 0 or args.int8_2_4:
+        if args.fp_features > 0:
             relative_path = os.path.join(modelutils.act_scale_dir, "{}.pt".format(args.model.split('/')[-1]))
+            model.config.act_scale_path = relative_path
             act_scales = torch.load(relative_path)
             print('Loaded act_scales from: ', relative_path)
         else:
@@ -248,46 +258,49 @@ if __name__ == '__main__':
 
     # Apply GPTQ on the model
     if args.w_bits < 16:
-        dataloader = get_model_and_tokenizer(
+        dataloader = get_calibrate_examples(
             tokenizer, args.data_file, args.sample_cnt, args.data_transform_type, args.gist_token)
         quantizers = llama_sequential(model, dataloader, act_scales, DEV, args)
 
-    # Add Input Quantization
-    if args.a_bits < 16:
-        number_of_zero_outlier_linear = 0
-        print('.....Activation Quantization.....')
-        quant.add_actquant(model)
-        layers = modelutils.find_layers(model)
+    model.save_pretrained(args.output_dir)
+    tokenizer.save_pretrained(args.output_dir)
 
-        for name in layers:
-
-            # Skip lm_head quantization
-            if 'lm_head' in name:
-                print(f'Skipping {name}\n')
-                continue
-
-            current_a_bits = args.a_bits
-
-            # Extract the number of outliers
-            if args.fp_relative:
-                outlier_num = int(layers[name].module.in_features / model.config.hidden_size) * args.fp_features
-            else:
-                outlier_num = args.fp_features
-
-            fp_threshold = args.fp_threshold
-            if 'down_proj' in name and args.int8_down_proj:
-                fp_threshold *= 2
-                current_a_bits = 8
-
-            if outlier_num > 0 and 'lm_head' not in name:
-                max_val = act_scales[name].abs().max()
-                if max_val > fp_threshold:
-                    layers[name].fp_features_configure(act_scales[name], outlier_num)
-                else:
-                    layers[name].fp_features_configure(act_scales[name], 0)
-                    number_of_zero_outlier_linear += 1
-
-            print(f'{name}: {outlier_num} outliers - {current_a_bits} bits', flush=True)
-            layers[name].quantizer.configure(bits=current_a_bits)
-
-        print(f'{number_of_zero_outlier_linear} layers with zero outliers.\n')
+    # # Add Input Quantization
+    # if args.a_bits < 16:
+    #     number_of_zero_outlier_linear = 0
+    #     print('.....Activation Quantization.....')
+    #     quant.add_actquant(model)
+    #     layers = modelutils.find_layers(model)
+    #
+    #     for name in layers:
+    #
+    #         # Skip lm_head quantization
+    #         if 'lm_head' in name:
+    #             print(f'Skipping {name}\n')
+    #             continue
+    #
+    #         current_a_bits = args.a_bits
+    #
+    #         # Extract the number of outliers
+    #         if args.fp_relative:
+    #             outlier_num = int(layers[name].module.in_features / model.config.hidden_size) * args.fp_features
+    #         else:
+    #             outlier_num = args.fp_features
+    #
+    #         fp_threshold = args.fp_threshold
+    #         if 'down_proj' in name and args.int8_down_proj:
+    #             fp_threshold *= 2
+    #             current_a_bits = 8
+    #
+    #         if outlier_num > 0 and 'lm_head' not in name:
+    #             max_val = act_scales[name].abs().max()
+    #             if max_val > fp_threshold:
+    #                 layers[name].fp_features_configure(act_scales[name], outlier_num)
+    #             else:
+    #                 layers[name].fp_features_configure(act_scales[name], 0)
+    #                 number_of_zero_outlier_linear += 1
+    #
+    #         print(f'{name}: {outlier_num} outliers - {current_a_bits} bits', flush=True)
+    #         layers[name].quantizer.configure(bits=current_a_bits)
+    #
+    #     print(f'{number_of_zero_outlier_linear} layers with zero outliers.\n')
