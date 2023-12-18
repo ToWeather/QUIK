@@ -69,7 +69,7 @@ def llama_parser():
 
 
 @torch.no_grad()
-def llama_sequential(model, dataloader, act_scales, dev, args):
+def llama_sequential(model, dataloader, act_scales, dev, args, scale_dict):
     print('Starting ...')
 
     use_cache = model.config.use_cache
@@ -187,6 +187,7 @@ def llama_sequential(model, dataloader, act_scales, dev, args):
             for name in subset:
                 modules_quik[name].fasterquant(percdamp=args.percdamp, groupsize=-1)
                 quantizers['model.layers.%d.%s' % (i, name)] = modules_quik[name].quantizer
+                scale_dict['model.layers.%d.%s.scale' % (i, name)] = modules_quik[name].quantizer.scale
                 modules_quik[name].free()
 
         for j in range(args.sample_cnt):
@@ -262,14 +263,19 @@ if __name__ == '__main__':
             act_scales = None
             print('No act_scales loaded')
 
+    scale_dict = {}
+
     # Apply GPTQ on the model
     if args.w_bits < 16:
         dataloader = get_calibrate_examples(
             tokenizer, args.data_file, args.sample_cnt, args.transform_type, args.gist_token, args.max_seq_len)
-        quantizers = llama_sequential(model, dataloader, act_scales, DEV, args)
+        quantizers = llama_sequential(model, dataloader, act_scales, DEV, args, scale_dict)
 
     model.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
+
+    if scale_dict:
+        torch.save(scale_dict, os.path.join(args.output_dir, "weight_scales.pt"))
 
     # # Add Input Quantization
     # if args.a_bits < 16:

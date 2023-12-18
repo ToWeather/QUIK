@@ -175,8 +175,8 @@ class ActQuantizer(torch.nn.Module):
 
         init_shape = x.shape
         
-        if len(init_shape) == 3:
-                assert init_shape[0] == 1, 'Only batch size of 1 is supported!'
+        # if len(init_shape) == 3:
+        #         assert init_shape[0] == 1, 'Only batch size of 1 is supported!'
         
         reshaped_x = x.reshape((-1, x.shape[-1]))
              

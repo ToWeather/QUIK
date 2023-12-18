@@ -19,7 +19,7 @@ class QUIK:
 
         self.rows = W.shape[0]
         self.columns = W.shape[1]
-        self.H = torch.zeros((self.columns, self.columns), device=self.dev)
+        self.H = torch.zeros((self.columns, self.columns), device=self.dev, dtype=torch.float64)
         self.nsamples = 0
 
         self.act_scales = act_scales
@@ -83,7 +83,7 @@ class QUIK:
         H = torch.linalg.cholesky(H)
         H = torch.cholesky_inverse(H)
         H = torch.linalg.cholesky(H, upper=True)
-        Hinv = H
+        Hinv = H.float()
 
         for i1 in range(0, self.columns, blocksize):
             i2 = min(i1 + blocksize, self.columns)
