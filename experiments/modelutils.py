@@ -81,7 +81,7 @@ def replace_single_mod_opt(module, name, layer_to_replace):
         tmp = getattr(module, attr)
         if type(tmp) in [torch.nn.Linear, ActQuantWrapper]:
             if attr in name:
-                ori = module.attr
+                ori = getattr(module, attr)
                 setattr(module, attr, layer_to_replace)
                 del ori
 
