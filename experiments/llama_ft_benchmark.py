@@ -52,6 +52,13 @@ def llama_parser():
     parser.add_argument('--fp_features', type=int, default=0, help='Number of features to keep in FP16.')
     parser.add_argument('--fp_relative', action='store_true',
                         help='Use relative features for number of fp_features (larger layers have more fp_features)')
+    # Act. Quantization Params:
+    parser.add_argument('--a_bits', type=int, default=16, choices=[4, 8, 16])
+
+    # Weight Quantization Params:
+    parser.add_argument('--w_bits', type=int, default=16, choices=[4, 8, 16])
+
+    parser.add_argument('--int8_down_proj', action='store_true', help='Use INT8 for Down Projection')
 
     parser.add_argument('--is_quant_model', action="store_true")
 
