@@ -80,6 +80,7 @@ def load_model(args):
 
     """
     model, tokenizer = get_model_and_tokenizer(args.model_dir, args.model_type)
+    model = model.half()
     model = model.to("cuda:0")
     if args.is_quant_model:
         act_scales = torch.load(model.config.act_scale_path)
@@ -107,8 +108,8 @@ def load_model(args):
                     act_name = name
                 layers[name].fp_features_configure(act_scales[act_name], fp_features_num)
             layers[name].quantizer.configure(bits=bits)
-
         llama_replace_with_kernels(model, act_scales, weight_scales)
+    torch.cuda.empty_cache()
     return model, tokenizer
 
 
