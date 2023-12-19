@@ -68,7 +68,7 @@ def llama_parser():
 
 
 def get_fp_features_num(module: torch.nn.Linear, model, args):
-    fp_features_num = args.fp_features_num
+    fp_features_num = args.fp_features
     if args.fp_relative:
         fp_features_num = int(module.in_features / model.config.hidden_size) * args.fp_features
     return fp_features_num
@@ -99,7 +99,7 @@ def load_model(args):
                 if args.int8_down_proj:
                     bits = 8
 
-            if args.fp_features_num > 0:
+            if args.fp_features > 0:
                 fp_features_num = get_fp_features_num(layers[name].module, model, args)
                 if "qkv" in name:
                     act_name = name.replace("qkv", "q")
