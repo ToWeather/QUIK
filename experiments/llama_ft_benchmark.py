@@ -119,7 +119,7 @@ def test_perf(args):
             )
             sync()
             times.append(time.perf_counter() - start_time)
-            tknps.append(batch["input_ids"].shape[-1] // times[-1])
+            tknps.append(batch["input_ids"].shape[-1] / times[-1])
             del out
         sync()
         torch.cuda.cudart().cudaProfilerStop()
@@ -129,6 +129,9 @@ def test_perf(args):
 
     print("test perf for decode phase...")
     with torch.no_grad():
+        all_times = []
+        all_tknps = []
+
         decode_times = []
         decode_tknps = []
         torch.cuda.cudart().cudaProfilerStart()
@@ -140,16 +143,24 @@ def test_perf(args):
             outputs = model.generate(**batch.to(model.device), max_new_tokens=10)
             new_gen_length = outputs.shape[1] - input_length - 1
             sync()
-            decode_used_time = time.perf_counter() - start_time - times[i]
+            all_time = time.perf_counter() - start_time
+            all_times.append(all_time)
+            all_tknps.append((new_gen_length + 1) / all_time)
+
+            decode_used_time = all_time - times[i]
             if decode_used_time > 0:
                 decode_times.append(decode_used_time)
-                decode_tknps.append(input_length // decode_used_time)
+                decode_tknps.append(new_gen_length / decode_used_time)
             del outputs
         sync()
         torch.cuda.cudart().cudaProfilerStop()
         import numpy as np
         print(f'Median times: {np.median(decode_times)} +- {1.96 * np.std(decode_times[2:-2])}')
         print(f'Median tokens/second: {np.median(decode_tknps)} +- {1.96 * np.std(decode_tknps[2:-2])}', )
+
+    print("perf for all phase...")
+    print(f'Median times: {np.median(all_times)} +- {1.96 * np.std(all_times[2:-2])}')
+    print(f'Median tokens/second: {np.median(all_tknps)} +- {1.96 * np.std(all_tknps[2:-2])}', )
 
 
 def llama_replace_with_kernels(model, act_scales, weight_scales):
