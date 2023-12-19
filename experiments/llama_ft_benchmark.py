@@ -49,12 +49,22 @@ def llama_parser():
     parser.add_argument('--sample_cnt', '-s', type=int, default=128,
                         help="the sample count for quantization.")
     parser.add_argument('--act_scale_file_name', type=str, default='Llama-2-7b-hf')
+    parser.add_argument('--fp_features', type=int, default=0, help='Number of features to keep in FP16.')
+    parser.add_argument('--fp_relative', action='store_true',
+                        help='Use relative features for number of fp_features (larger layers have more fp_features)')
 
     parser.add_argument('--is_quant_model', action="store_true")
 
     args = parser.parse_args()
 
     return args
+
+
+def get_fp_features_num(module: torch.nn.Linear, model, args):
+    fp_features_num = args.fp_features_num
+    if args.fp_relative:
+        fp_features_num = int(module.in_features / model.config.hidden_size) * args.fp_features
+    return fp_features_num
 
 
 def load_model(args):
@@ -67,6 +77,30 @@ def load_model(args):
     if args.is_quant_model:
         act_scales = torch.load(model.config.act_scale_path)
         weight_scales = torch.load(os.path.join(args.model_dir, 'weight_scales.pt'))
+
+        quant_sim.add_actquant(model)
+        layers = modelutils.find_layers(model)
+
+        for name in layers:
+
+            bits = args.a_bits
+            if 'lm_head' in name or "rotary_emb" in name:
+                print(f'Skipping {name}\n')
+                continue
+
+            if 'down_proj' in name:
+                if args.int8_down_proj:
+                    bits = 8
+
+            if args.fp_features_num > 0:
+                fp_features_num = get_fp_features_num(layers[name].module, model, args)
+                if "qkv" in name:
+                    act_name = name.replace("qkv", "q")
+                else:
+                    act_name = name
+                layers[name].fp_features_configure(act_scales[act_name], fp_features_num)
+            layers[name].quantizer.configure(bits=bits)
+
         llama_replace_with_kernels(model, act_scales, weight_scales)
     return model, tokenizer
 
